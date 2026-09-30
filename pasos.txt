@@ -1,0 +1,309 @@
+Verificar dependencias
+
+node -v
+npm -v
+
+luego npm init -y
+    a package.json añadir: "start": "start index.js"
+                           "dev": "nodemon index.js"
+
+Instalar dependecias
+npm install express mongoose cors multer validator dotenv
+instalar npm install dotenv 
+
+luego la dependencia del desarrollo 
+npm install --save-dev nodemon
+
+Crear .env
+PORT=3002
+MONGO_URI=mongodb://localhost:27017/blog2 
+
+verificar que tenga
+"dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mongoose": "^8.5.0",
+    "multer": "^1.4.5-lts.1",
+    "validator": "^13.12.0"
+},
+
+crear mkdir modelos controladores rutas helpers uploads public
+
+modelos/articulo.js
+
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
+
+const ArticuloSchema = new Schema({
+    titulo:    { type: String, required: true, trim: true },
+    contenido: { type: String, required: true },
+    fecha:     { type: Date,   default: Date.now },
+    imgUrl:    { type: String, default: "default.png" }
+});
+
+// FIX para evitar OverwriteModelError
+module.exports = mongoose.models.Articulo
+    || mongoose.model('Articulo', ArticuloSchema, 'articulos');
+
+
+helpers/validar.js
+const validator = require('validator');
+
+const validarArticulo = (parametros) => {
+    const validarTitulo =
+        parametros.titulo &&
+        !validator.isEmpty(parametros.titulo) &&
+        validator.isLength(parametros.titulo, { min: 3, max: 200 });
+
+    const validarContenido =
+        parametros.contenido && !validator.isEmpty(parametros.contenido);
+
+    if (!validarTitulo || !validarContenido) {
+        throw new Error('Faltan datos por enviar o son incorrectos');
+    }
+};
+
+module.exports = { validarArticulo };
+
+////////////////////////////////////////////////////////////////
+controladores/articulo.js
+
+const Articulo = require('../modelos/articulo');
+const { validarArticulo } = require('../helpers/validar');
+const fs   = require('fs');
+const path = require('path');
+
+// CREAR
+const crear = async (req, res) => {
+    const parametros = req.body;
+
+    try {
+        validarArticulo(parametros);
+    } catch (error) {
+        if (req.file) fs.unlinkSync(req.file.path);
+        return res.status(400).json({
+            status: "error",
+            mensaje: "Faltan datos por enviar o son incorrectos",
+            detalle: error.message
+        });
+    }
+
+    try {
+        const nuevoArticulo = new Articulo({
+            titulo:    parametros.titulo,
+            contenido: parametros.contenido,
+            fecha:     new Date(),
+            imgUrl:    req.file ? req.file.filename : "default.png"
+        });
+
+        const articuloGuardado = await nuevoArticulo.save();
+        return res.status(201).json({
+            status: "success",
+            mensaje: "Artículo creado con éxito",
+            articulo: articuloGuardado
+        });
+    } catch (error) {
+        if (req.file) fs.unlinkSync(req.file.path);
+        return res.status(500).json({
+            status: "error",
+            mensaje: "Error al guardar",
+            error: error.message
+        });
+    }
+};
+
+// LISTAR
+const listar = async (req, res) => {
+    try {
+        const ultimos = req.query.ultimos ? parseInt(req.query.ultimos) : null;
+        let consulta = Articulo.find({}).sort({ fecha: -1 });
+        if (ultimos) consulta = consulta.limit(ultimos);
+
+        const articulos = await consulta;
+        if (!articulos || articulos.length === 0) {
+            return res.status(404).json({ status: "error", mensaje: "No hay artículos" });
+        }
+        return res.status(200).json({
+            status: "success",
+            contador: articulos.length,
+            articulos
+        });
+    } catch (error) {
+        return res.status(500).json({ status: "error", error: error.message });
+    }
+};
+
+// BUSCAR UNO
+const uno = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id || id.length !== 24) {
+            return res.status(400).json({ status: "error", mensaje: "ID inválido" });
+        }
+        const articulo = await Articulo.findById(id);
+        if (!articulo) {
+            return res.status(404).json({ status: "error", mensaje: "No encontrado" });
+        }
+        return res.status(200).json({ status: "success", articulo });
+    } catch (error) {
+        return res.status(500).json({ status: "error", error: error.message });
+    }
+};
+
+// EDITAR
+const editar = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const parametros = req.body;
+
+        if (!id || id.length !== 24) {
+            if (req.file) fs.unlinkSync(req.file.path);
+            return res.status(400).json({ status: "error", mensaje: "ID inválido" });
+        }
+
+        try {
+            validarArticulo(parametros);
+        } catch (error) {
+            if (req.file) fs.unlinkSync(req.file.path);
+            return res.status(400).json({ status: "error", detalle: error.message });
+        }
+
+        const articuloActual = await Articulo.findById(id);
+        if (!articuloActual) {
+            if (req.file) fs.unlinkSync(req.file.path);
+            return res.status(404).json({ status: "error", mensaje: "No encontrado" });
+        }
+
+        if (req.file && articuloActual.imgUrl !== "default.png") {
+            const rutaVieja = path.join(__dirname, '..', 'uploads', articuloActual.imgUrl);
+            if (fs.existsSync(rutaVieja)) fs.unlinkSync(rutaVieja);
+        }
+
+        const datos = {
+            titulo: parametros.titulo,
+            contenido: parametros.contenido,
+            fechaActualizacion: new Date()
+        };
+        if (req.file) datos.imgUrl = req.file.filename;
+
+        const actualizado = await Articulo.findByIdAndUpdate(id, datos, { new: true });
+
+        return res.status(200).json({
+            status: "success",
+            mensaje: "Artículo actualizado",
+            articulo: actualizado
+        });
+    } catch (error) {
+        if (req.file) fs.unlinkSync(req.file.path);
+        return res.status(500).json({ status: "error", error: error.message });
+    }
+};
+
+// BORRAR
+const borrar = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id || id.length !== 24) {
+            return res.status(400).json({ status: "error", mensaje: "ID inválido" });
+        }
+
+        const borrado = await Articulo.findByIdAndDelete(id);
+        if (!borrado) {
+            return res.status(404).json({ status: "error", mensaje: "No encontrado" });
+        }
+
+        if (borrado.imgUrl && borrado.imgUrl !== "default.png") {
+            const ruta = path.join(__dirname, '..', 'uploads', borrado.imgUrl);
+            if (fs.existsSync(ruta)) fs.unlinkSync(ruta);
+        }
+
+        return res.status(200).json({
+            status: "success",
+            mensaje: "Artículo borrado",
+            articulo: borrado
+        });
+    } catch (error) {
+        return res.status(500).json({ status: "error", error: error.message });
+    }
+};
+
+module.exports = { crear, listar, uno, editar, borrar };
+
+///////////////////////////////////////
+Crear las rutas en rutas/articulo.js
+const express = require('express');
+const multer  = require('multer');
+const path    = require('path');
+const fs      = require('fs');
+const ctrl    = require('../controladores/articulo');
+
+const router = express.Router();
+
+// Asegurar que exista la carpeta uploads
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+// Configurar Multer
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `articulo_${Date.now()}${ext}`);
+    }
+});
+
+const fileFilter = (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Solo se permiten imágenes'), false);
+};
+
+const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Rutas
+router.post('/crear',          upload.single('img'), ctrl.crear);
+router.get('/listar',          ctrl.listar);
+router.get('/articulo/:id',    ctrl.uno);
+router.put('/actualizar/:id',  upload.single('img'), ctrl.editar);
+router.delete('/borrar/:id',   ctrl.borrar);
+
+module.exports = router;
+
+
+///////////////////////////////////////////////////
+Index.js
+require('dotenv').config();
+const express  = require('express');
+const mongoose = require('mongoose');
+const cors     = require('cors');
+const path     = require('path');
+
+const articuloRoutes = require('./rutas/articulo');
+
+const app = express();
+
+// Middlewares globales
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Estáticos
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Rutas de la API
+app.use('/api', articuloRoutes);
+
+// Ruta raíz
+app.get('/', (req, res) => {
+    res.json({ mensaje: 'API Blog funcionando 🚀' });
+});
+
+// Conexión BD
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/blog_db')
+    .then(() => console.log('✅ MongoDB conectado'))
+    .catch(err => console.error('❌ Error Mongo:', err.message));
+
+// Servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Servidor en http://localhost:${PORT}`));

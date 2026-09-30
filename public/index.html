@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Blog</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <header class="header">
+        <div class="container header__inner">
+            <h1 class="logo">📝 Mi Blog</h1>
+            <nav class="nav">
+                <a href="#articulos">Artículos</a>
+                <a href="#crear" class="btn btn--primary">Nuevo artículo</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+
+        <!-- SECCIÓN: LISTADO -->
+        <section id="articulos" class="section">
+            <h2 class="section__title">Últimos artículos</h2>
+            <div id="lista-articulos" class="grid">
+                <!-- Los artículos se inyectan con JS -->
+                <p class="loading">Cargando artículos...</p>
+            </div>
+        </section>
+
+        <!-- SECCIÓN: CREAR -->
+        <section id="crear" class="section">
+            <h2 class="section__title">Crear nuevo artículo</h2>
+            <form id="form-articulo" class="form" enctype="multipart/form-data">
+                <div class="form__group">
+                    <label for="titulo">Título</label>
+                    <input type="text" id="titulo" name="titulo" required placeholder="Ej: Mi primer post">
+                </div>
+
+                <div class="form__group">
+                    <label for="contenido">Contenido</label>
+                    <textarea id="contenido" name="contenido" rows="6" required placeholder="Escribe aquí..."></textarea>
+                </div>
+
+                <div class="form__group">
+                    <label for="img">Imagen</label>
+                    <input type="file" id="img" name="img" accept="image/*">
+                    <small>Formatos: JPG, PNG, WEBP · Máx 5 MB</small>
+                </div>
+
+                <button type="submit" class="btn btn--primary">Publicar</button>
+                <p id="mensaje" class="mensaje"></p>
+            </form>
+        </section>
+
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>Anabel Lailany Machic Monterroso</p>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
